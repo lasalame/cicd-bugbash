@@ -1,0 +1,41 @@
+name: Docker Image CI 
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Login
+      uses: azure/docker-login@v1
+      with:
+        login-server: nivsregistry.azurecr.io
+        username: ${{ secrets.ACR_USERNAME }}
+        password: ${{ secrets.ACR_PASSWORD }}
+    - name: Build the Docker image
+      run: docker build . --file Dockerfile --tag nivsregistry.azurecr.io/cicdtestrepo:${{ github.sha }}
+   
+    - uses: Azure/container-scan@v0
+      name: Scan image for vulnerabilities
+      id: container-scan
+      continue-on-error: true
+      with:
+        image-name: nivsregistry.azurecr.io/cicdtestrepo:${{ github.sha }}
+
+    - name: Push Docker image - nivsregistry.azurecr.io/cicdtestrepo:${{ github.sha }}
+      run: |
+        docker push nivsregistry.azurecr.io/cicdtestrepo:${{ github.sha }}
+    - name: Post logs to appinsights
+      uses: Azure/publish-security-assessments@v0
+      with:
+        scan-results-path: ${{ steps.container-scan.outputs.scan-report-path }}
+        connection-string: ${{ secrets.AI_CONNECTION_STRING }}
+        subscription-token: ${{ secrets.AI_SUBSCRIPTION_TOKEN }}
